@@ -30,8 +30,9 @@
 DEVICE     = atmega328p
 CLOCK      = 16000000
 PROGRAMMER = -c avrisp2 -P usb
-OBJECTS    = main.o motion_control.o gcode.o spindle_control.o serial.o protocol.o stepper.o \
-             eeprom.o settings.o planner.o nuts_bolts.o limits.o print.o
+SRC        = main.c motion_control.c gcode.c spindle_control.c serial.c protocol.c stepper.c \
+             eeprom.c settings.c planner.c nuts_bolts.c limits.c print.c
+OBJECTS    = $(SRC:.c=.o) 
 # FUSES      = -U hfuse:w:0xd9:m -U lfuse:w:0x24:m
 FUSES      = -U hfuse:w:0xd2:m -U lfuse:w:0xff:m
 # update that line with this when programmer is back up: 
@@ -39,24 +40,27 @@ FUSES      = -U hfuse:w:0xd2:m -U lfuse:w:0xff:m
 
 # Tune the lines below only if you know what you are doing:
 
+# Compiler flags to generate dependency files.
+GENDEPFLAGS = -MMD -MP -MF $(@F).d
+
 AVRDUDE = avrdude $(PROGRAMMER) -p $(DEVICE) -B 10 -F 
 COMPILE = avr-gcc -Wall -Os -DF_CPU=$(CLOCK) -mmcu=$(DEVICE) -I. -ffunction-sections
 
 # symbolic targets:
-all:	grbl.hex
+all: grbl.hex
 
-.c.o:
-	$(COMPILE) -c $< -o $@ 
+%.o : %.c
+	$(COMPILE) $(GENDEPFLAGS) -c $< -o $@ 
 
-.S.o:
+%.o : %.S
 	$(COMPILE) -x assembler-with-cpp -c $< -o $@
 # "-x assembler-with-cpp" should not be necessary since this is the default
 # file type for the .S (with capital S) extension. However, upper case
 # characters are not always preserved on Windows. To ensure WinAVR
 # compatibility define the file type manually.
 
-.c.s:
-	$(COMPILE) -S $< -o $@
+%.S : %.c
+	$(COMPILE) $(GENDEPFLAGS) -S $< -o $@
 
 flash:	all
 	$(AVRDUDE) -U flash:w:grbl.hex:i
@@ -72,7 +76,7 @@ load: all
 	bootloadHID grbl.hex
 
 clean:
-	rm -f grbl.hex main.elf $(OBJECTS)
+	rm -f grbl.hex main.elf $(OBJECTS) $(SRC:.c=.o.d)
 
 # file targets:
 main.elf: $(OBJECTS)
@@ -92,3 +96,5 @@ disasm:	main.elf
 
 cpp:
 	$(COMPILE) -E main.c 
+
+-include $(SRC:.c=.o.d)
